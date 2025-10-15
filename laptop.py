@@ -6,21 +6,21 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 
 
-def fetch_pages():
+def fetch_pages(query):
     """
-    Henter data for bærbare PC-er fra FINN Torget ved å iterere gjennom sidene.
+    Henter data for bærbare PC-er fra FINN Torget ved å iterere gjennom sidene for et gitt søk.
     """
     base_url = "https://www.finn.no/recommerce/forsale/search"
     page_num = 1
     laptops = []
 
-    print("Starter henting...")
+    print(f"Starter henting for søket: '{query}'...")
     while True:
         params = {
             "price_to": "7000",
             "product_category": "2.93.3215.43",
             "page": page_num,
-            "q": "16gb",
+            "q": query,  # Bruker nå query-parameteret
             # "location": "1.20016.20318",  # trondheim
         }
 
@@ -29,15 +29,15 @@ def fetch_pages():
             response.raise_for_status()  # Stopper hvis statuskoden er en feil (f.eks. 404, 500)
 
             soup = BeautifulSoup(response.text, "html.parser")
-            # Finner alle <article>-elementer, som representerer en annonse
             articles = soup.find_all("article", class_="sf-search-ad")
 
             if not articles:
-                print(f"Ingen flere annonser funnet. Stopper på side {page_num - 1}.")
+                print(
+                    f"Ingen flere annonser funnet for '{query}'. Stopper på side {page_num - 1}."
+                )
                 break
 
             for article in articles:
-                # Henter tittel fra <h2>-elementet inni artikkelen
                 title_element = article.find("h2", class_="h4")
                 title = (
                     title_element.get_text(strip=True)
@@ -46,23 +46,18 @@ def fetch_pages():
                 )
 
                 price_container = article.find("div", class_="font-bold")
-
-                # Then, find the <span> within that container
                 price_element = (
                     price_container.find("span") if price_container else None
                 )
-
                 price = (
                     price_element.get_text(strip=True)
                     if price_element
                     else "Ingen pris"
                 )
 
-                # Henter lenken til annonsen
                 link_element = article.find("a", class_="sf-search-ad-link")
                 url = link_element["href"] if link_element else "Ingen URL"
 
-                # Henter lokasjon
                 location_element = article.find("span", class_="whitespace-nowrap")
                 location = (
                     location_element.get_text(strip=True)
@@ -79,14 +74,18 @@ def fetch_pages():
                 }
                 laptops.append(laptop)
 
-            print(f"Fant {len(articles)} bærbare PC-er på side {page_num}.")
+            print(
+                f"Fant {len(articles)} bærbare PC-er på side {page_num} for '{query}'."
+            )
             page_num += 1
 
         except requests.exceptions.RequestException as e:
-            print(f"En feil oppstod under henting av side {page_num}: {e}. Stopper.")
+            print(
+                f"En feil oppstod under henting av side {page_num} for '{query}': {e}. Stopper."
+            )
             break
         except Exception as e:
-            print(f"En uventet feil oppstod: {e}. Stopper.")
+            print(f"En uventet feil oppstod for '{query}': {e}. Stopper.")
             break
 
     return laptops
@@ -98,7 +97,6 @@ def to_csv(laptops, filename):
         print(f"Ingen data å skrive til {filename}.")
         return
 
-    # Bruker den første ordboken til å bestemme kolonnenavnene
     fieldnames = laptops[0].keys()
 
     with open(filename, "w", newline="", encoding="utf-8") as output_file:
@@ -109,7 +107,15 @@ def to_csv(laptops, filename):
 
 
 if __name__ == "__main__":
-    all_fetched_laptops = fetch_pages()
+    # Definer søkene du vil kjøre i denne listen
+    search_queries = ["oled"]
+    all_fetched_laptops = []
+
+    # Går gjennom hvert søk og legger til resultatene i en felles liste
+    for query in search_queries:
+        laptops_for_query = fetch_pages(query)
+        if laptops_for_query:
+            all_fetched_laptops.extend(laptops_for_query)
 
     if all_fetched_laptops:
-        to_csv(all_fetched_laptops, "laptops_from_finn.csv")
+        to_csv(all_fetched_laptops, "oled_laptops_from_finn.csv")
